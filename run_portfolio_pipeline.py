@@ -25,17 +25,15 @@ def run_pipeline():
     
     raw_data = yf.download(all_tickers, start=start_date, end=end_date, progress=False)
     
-    # 데이터 정리: 모든 열을 확인하여 유효한 데이터만 남김
-    if 'Adj Close' in raw_data.columns:
-        price_data = raw_data['Adj Close']
-    elif 'Close' in raw_data.columns:
-        price_data = raw_data['Close']
+    if isinstance(raw_data.columns, pd.MultiIndex):
+        price_data = raw_data['Adj Close'] if 'Adj Close' in raw_data.columns.levels[0] else raw_data['Close']
     else:
-        price_data = raw_data.xs('Adj Close', level=0, axis=1) if 'Adj Close' in raw_data.columns.levels[0] else raw_data.xs('Close', level=0, axis=1)
-
-    # 1. 텅 빈 종목 제거, 2. 변동성이 0인 종목 제거 (ZeroDivision 방지)
-    price_data = price_data.rename(columns=rename_map).dropna(axis=1, how='any')
-    price_data = price_data.loc[:, price_data.std() > 0]
+        price_data = raw_data['Adj Close'] if 'Adj Close' in raw_data.columns else raw_data['Close']
+        
+    # 1. 누락 데이터 제거
+    price_data = price_data.rename(columns=rename_map).ffill().bfill().dropna(axis=1)
+    # 2. 변동성이 없는(죽은) 종목 제거
+    price_data = price_data.loc[:, price_data.std() > 0.0001]
 
     daily_returns = price_data.pct_change().dropna()
     exp_returns = daily_returns.mean() * 252
@@ -48,14 +46,17 @@ def run_pipeline():
     def get_perf(w):
         r = np.sum(exp_returns * w)
         v = np.sqrt(np.dot(w.T, np.dot(cov_matrix, w)))
-        # 변동성이 0이면 매우 작은 값을 주어 에러 방지
-        v = v if v > 1e-6 else 1e-6
-        return r, v, (r - rf_rate) / v
+        # 분모가 0이 되는 것을 방지 (최소값 0.001 보장)
+        sharpe = (r - rf_rate) / v if v > 0.001 else -1
+        return r, v, sharpe
 
     cons = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
     bounds = tuple((0, 1) for _ in range(num_assets))
     
-    res = minimize(lambda w: -get_perf(w)[2], np.array([1./num_assets]*num_assets), method='SLSQP', bounds=bounds, constraints=cons)
+    # 랜덤 초기값이 아니라 동일 비중으로 시작
+    init_guess = np.array([1./num_assets] * num_assets)
+    
+    res = minimize(lambda w: -get_perf(w)[2], init_guess, method='SLSQP', bounds=bounds, constraints=cons)
     ms_w = res.x
     ms_ret, ms_vol, ms_sharpe = get_perf(ms_w)
 
