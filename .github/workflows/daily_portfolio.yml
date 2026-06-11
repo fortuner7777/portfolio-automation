@@ -1,0 +1,32 @@
+name: Daily Portfolio Optimization Scheduler
+
+on:
+  schedule:
+    # UTC 기준 매일 23:30 (한국 시간 오전 08:30 분 분석 완료 목적)
+    - cron: '30 23 * * *'
+  workflow_dispatch: # 필요할 때 버튼을 눌러 수동 실행도 가능하게 설정
+
+jobs:
+  optimize_and_notify:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 저장소 코드 체크아웃
+      uses: actions/checkout@v3
+
+    - name: 파이썬 환경 설정
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: 필수 라이브러리 설치
+      run: |
+        pip install yfinance pandas numpy scipy requests
+
+    - name: 포트폴리오 분석 및 알림 발송 실행
+      env:
+        # API 인증키나 전화번호 등은 GitHub Secrets에 안전하게 저장하여 연동합니다.
+        API_KEY: ${{ secrets.NOTIFICATION_API_KEY }}
+        SENDER_NO: ${{ secrets.SENDER_NUMBER }}
+        RECEIVER_NO: ${{ secrets.RECEIVER_NUMBER }}
+      run: python run_portfolio_pipeline.py
