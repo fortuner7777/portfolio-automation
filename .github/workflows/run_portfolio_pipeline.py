@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 def run_pipeline():
     print("🚀 [시스템] 포트폴리오 자동 최적화 파이프라인 가동...")
     
-    # CDE 제외
     us_tickers = [
         'NVDA', 'MSFT', 'GOOGL', 'AVGO', 'TSLA', 'AMD', 'TSM', 'AMZN', 'META', 'IONQ',
         'TLN', 'COIN', 'CRCL', 'CLS', 'BMNR', 'MU', 'ARM', 'UNH', 'VST', 'APP',
@@ -24,21 +23,24 @@ def run_pipeline():
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
     
-    # 데이터 수집 (안정성 강화)
+    # 데이터 수집 및 안전한 데이터 처리
     raw_data = yf.download(all_tickers, start=start_date, end=end_date, progress=False)
-    if isinstance(raw_data.columns, pd.MultiIndex):
+    
+    # 'Adj Close'가 없으면 'Close'를 사용하는 로직 추가
+    if 'Adj Close' in raw_data.columns:
         price_data = raw_data['Adj Close']
+    elif 'Close' in raw_data.columns:
+        price_data = raw_data['Close']
     else:
-        price_data = raw_data['Adj Close']
-        
-    # 데이터 정리: 비어있는 종목은 삭제
+        # 멀티인덱스 대응
+        price_data = raw_data.xs('Adj Close', level=0, axis=1) if 'Adj Close' in raw_data.columns.levels[0] else raw_data.xs('Close', level=0, axis=1)
+
     price_data = price_data.rename(columns=rename_map).dropna(axis=1, how='any')
 
     daily_returns = price_data.pct_change().dropna()
     exp_returns = daily_returns.mean() * 252
     cov_matrix = daily_returns.cov() * 252
     
-    # 현재 데이터에 맞춰 종목 개수 재산정
     assets = price_data.columns
     num_assets = len(assets)
     rf_rate = 0.035
@@ -51,10 +53,7 @@ def run_pipeline():
     cons = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
     bounds = tuple((0, 1) for _ in range(num_assets))
     
-    # 초기값 설정
-    init_guess = np.array([1./num_assets] * num_assets)
-    
-    res = minimize(lambda w: -get_perf(w)[2], init_guess, method='SLSQP', bounds=bounds, constraints=cons)
+    res = minimize(lambda w: -get_perf(w)[2], np.array([1./num_assets]*num_assets), method='SLSQP', bounds=bounds, constraints=cons)
     ms_w = res.x
     ms_ret, ms_vol, ms_sharpe = get_perf(ms_w)
 
