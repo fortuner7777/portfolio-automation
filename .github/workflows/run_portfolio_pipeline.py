@@ -68,7 +68,6 @@ def run_pipeline():
     app_password = os.getenv("EMAIL_APP_PASSWORD")
     receiver_email = os.getenv("RECEIVER_EMAIL")
 
-    # 디버깅용 코드 추가
     print(f"DEBUG: SENDER_EMAIL found: {bool(sender_email)}")
     print(f"DEBUG: EMAIL_APP_PASSWORD found: {bool(app_password)}")
     print(f"DEBUG: RECEIVER_EMAIL found: {bool(receiver_email)}")
@@ -95,4 +94,3 @@ def run_pipeline():
 
 if __name__ == "__main__":
     run_pipeline()
-    
