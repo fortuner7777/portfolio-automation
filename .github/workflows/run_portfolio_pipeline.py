@@ -88,11 +88,11 @@ def run_pipeline():
     else:
         print("⚠️ [환경변수 미설정] GitHub Secrets에 이메일 정보가 없습니다.")
 
-if __name__ == "__main__":
-    run_pipeline()
-
 # 디버깅용 코드 추가
     print(f"DEBUG: SENDER_EMAIL found: {bool(sender_email)}")
     print(f"DEBUG: EMAIL_APP_PASSWORD found: {bool(app_password)}")
     print(f"DEBUG: RECEIVER_EMAIL found: {bool(receiver_email)}")
+
+if __name__ == "__main__":
+    run_pipeline()
     
