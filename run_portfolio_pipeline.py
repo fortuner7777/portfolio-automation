@@ -1,5 +1,7 @@
 import os
-import requests
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -7,7 +9,7 @@ from scipy.optimize import minimize
 from datetime import datetime, timedelta
 
 def run_pipeline():
-    print("🚀 [시스템] 포트폴리오 자동 최적화 파이프라인 가동...")
+    print("🚀 [시스템] 포트폴리오 자동 최적화 파이프라인 가동 (이메일 버전)...")
     
     us_tickers = [
         'NVDA', 'MSFT', 'GOOGL', 'AVGO', 'TSLA', 'AMD', 'TSM', 'AMZN', 'META', 'IONQ',
@@ -62,27 +64,35 @@ def run_pipeline():
 
     print("\n[생성된 리포트 내용]\n", msg)
     
-    api_key = os.getenv("API_KEY")
-    sender = os.getenv("SENDER_NO")
-    receiver = os.getenv("RECEIVER_NO")
+    sender_email = os.getenv("SENDER_EMAIL")
+    app_password = os.getenv("EMAIL_APP_PASSWORD")
+    receiver_email = os.getenv("RECEIVER_EMAIL")
 
-    if api_key and sender and receiver:
-        api_url = "https://apis.aligo.in/send/" 
-        payload = {
-            'key': api_key,
-            'userid': 'your_userid',
-            'sender': sender,
-            'receiver': receiver,
-            'msg': msg,
-            'title': f'{report_date} 포트폴리오 리포트'
-        }
+    # 디버깅용 코드 추가
+    print(f"DEBUG: SENDER_EMAIL found: {bool(sender_email)}")
+    print(f"DEBUG: EMAIL_APP_PASSWORD found: {bool(app_password)}")
+    print(f"DEBUG: RECEIVER_EMAIL found: {bool(receiver_email)}")
+    
+    if sender_email and app_password and receiver_email:
         try:
-            response = requests.post(api_url, data=payload)
-            print(f"✅ [알림 발송 완료] 응답 코드: {response.status_code}")
+            em = MIMEMultipart()
+            em['From'] = sender_email
+            em['To'] = receiver_email
+            em['Subject'] = f"📈 {report_date} 포트폴리오 자동 분석 리포트"
+            em.attach(MIMEText(msg, 'plain'))
+
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(sender_email, app_password)
+            server.send_message(em)
+            server.quit()
+            
+            print("✅ [알림 발송 완료] 이메일이 성공적으로 전송되었습니다.")
         except Exception as e:
             print(f"❌ [알림 발송 실패] 에러: {e}")
     else:
-        print("⚠️ [환경변수 미설정] GitHub Secrets 설정 전이므로 콘솔에만 결과를 출력합니다.")
+        print("⚠️ [환경변수 미설정] GitHub Secrets에 이메일 정보가 없습니다.")
 
 if __name__ == "__main__":
     run_pipeline()
+    
