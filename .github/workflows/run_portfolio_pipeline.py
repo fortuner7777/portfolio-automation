@@ -1,5 +1,7 @@
 import os
-import requests
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -7,8 +9,9 @@ from scipy.optimize import minimize
 from datetime import datetime, timedelta
 
 def run_pipeline():
-    print("🚀 [시스템] 포트폴리오 자동 최적화 파이프라인 가동...")
+    print("🚀 [시스템] 포트폴리오 자동 최적화 파이프라인 가동 (이메일 버전)...")
     
+    # 1. 자산군 리스트 정의
     us_tickers = [
         'NVDA', 'MSFT', 'GOOGL', 'AVGO', 'TSLA', 'AMD', 'TSM', 'AMZN', 'META', 'IONQ',
         'TLN', 'COIN', 'CRCL', 'CLS', 'BMNR', 'MU', 'ARM', 'UNH', 'VST', 'APP',
@@ -18,6 +21,7 @@ def run_pipeline():
     all_tickers = us_tickers + kr_tickers
     rename_map = {'005930.KS': '삼성전자', '000660.KS': 'SK하이닉스', '035420.KS': 'NAVER', '035720.KS': '카카오'}
 
+    # 2. 데이터 다운로드
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
     raw_data = yf.download(all_tickers, start=start_date, end=end_date, progress=False)
@@ -28,6 +32,7 @@ def run_pipeline():
         price_data = raw_data['Adj Close'] if 'Adj Close' in raw_data.columns else raw_data['Close']
     price_data = price_data.rename(columns=rename_map).ffill().dropna()
 
+    # 3. 최적화 알고리즘
     daily_returns = price_data.pct_change().dropna()
     exp_returns = daily_returns.mean() * 252
     cov_matrix = daily_returns.corr() * daily_returns.std().values[:, None] * daily_returns.std().values * 252
@@ -46,6 +51,7 @@ def run_pipeline():
     ms_w = res.x
     ms_ret, ms_vol, ms_sharpe = get_perf(ms_w)
 
+    # 4. 리포트 텍스트 구성
     df_w = pd.DataFrame({'Asset': price_data.columns, 'Weight': ms_w * 100})
     top_assets = df_w[df_w['Weight'] > 1.0].sort_values(by='Weight', ascending=False)
 
@@ -62,27 +68,32 @@ def run_pipeline():
 
     print("\n[생성된 리포트 내용]\n", msg)
     
-    api_key = os.getenv("API_KEY")
-    sender = os.getenv("SENDER_NO")
-    receiver = os.getenv("RECEIVER_NO")
+    # 5. 이메일(Gmail) 발송 모듈
+    sender_email = os.getenv("SENDER_EMAIL")
+    app_password = os.getenv("EMAIL_APP_PASSWORD")
+    receiver_email = os.getenv("RECEIVER_EMAIL")
 
-    if api_key and sender and receiver:
-        api_url = "https://apis.aligo.in/send/" 
-        payload = {
-            'key': api_key,
-            'userid': 'your_userid',
-            'sender': sender,
-            'receiver': receiver,
-            'msg': msg,
-            'title': f'{report_date} 포트폴리오 리포트'
-        }
+    if sender_email and app_password and receiver_email:
         try:
-            response = requests.post(api_url, data=payload)
-            print(f"✅ [알림 발송 완료] 응답 코드: {response.status_code}")
+            # 이메일 구성
+            em = MIMEMultipart()
+            em['From'] = sender_email
+            em['To'] = receiver_email
+            em['Subject'] = f"📈 {report_date} 포트폴리오 자동 분석 리포트"
+            em.attach(MIMEText(msg, 'plain'))
+
+            # Gmail SMTP 서버 연결
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(sender_email, app_password)
+            server.send_message(em)
+            server.quit()
+            
+            print("✅ [알림 발송 완료] 이메일이 성공적으로 전송되었습니다.")
         except Exception as e:
             print(f"❌ [알림 발송 실패] 에러: {e}")
     else:
-        print("⚠️ [환경변수 미설정] GitHub Secrets 설정 전이므로 콘솔에만 결과를 출력합니다.")
+        print("⚠️ [환경변수 미설정] GitHub Secrets에 이메일 정보가 없습니다.")
 
 if __name__ == "__main__":
     run_pipeline()
