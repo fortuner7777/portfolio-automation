@@ -68,6 +68,11 @@ def run_pipeline():
     app_password = os.getenv("EMAIL_APP_PASSWORD")
     receiver_email = os.getenv("RECEIVER_EMAIL")
 
+    # 디버깅용 코드 추가
+    print(f"DEBUG: SENDER_EMAIL found: {bool(sender_email)}")
+    print(f"DEBUG: EMAIL_APP_PASSWORD found: {bool(app_password)}")
+    print(f"DEBUG: RECEIVER_EMAIL found: {bool(receiver_email)}")
+    
     if sender_email and app_password and receiver_email:
         try:
             em = MIMEMultipart()
@@ -87,11 +92,6 @@ def run_pipeline():
             print(f"❌ [알림 발송 실패] 에러: {e}")
     else:
         print("⚠️ [환경변수 미설정] GitHub Secrets에 이메일 정보가 없습니다.")
-
-# 디버깅용 코드 추가
-    print(f"DEBUG: SENDER_EMAIL found: {bool(sender_email)}")
-    print(f"DEBUG: EMAIL_APP_PASSWORD found: {bool(app_password)}")
-    print(f"DEBUG: RECEIVER_EMAIL found: {bool(receiver_email)}")
 
 if __name__ == "__main__":
     run_pipeline()
